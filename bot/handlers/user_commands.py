@@ -401,7 +401,7 @@ async def _show_categories(update, context, telegram_id: int, username, ppob_cli
 
 
 async def _show_category_services(update, context, category: str) -> None:
-    """Show services in a specific category as numbered inline buttons."""
+    """Show services in a specific category as name buttons (not ID numbers)."""
     categories = context.user_data.get("services_by_cat", {})
     all_services_cache = context.user_data.get("services_cache", {})
 
@@ -416,12 +416,14 @@ async def _show_category_services(update, context, category: str) -> None:
         await update.callback_query.answer("Tidak ada layanan di kategori ini.")
         return
 
-    # Build numbered buttons (7 per row like reference image)
+    # Build name buttons (2 per row) — show service name, not ID
     rows = []
     row = []
     for svc in services:
-        row.append(InlineKeyboardButton(str(svc.id), callback_data=f"svc_{svc.id}"))
-        if len(row) == 7:
+        # Truncate long names to fit button
+        btn_label = svc.name[:30] + "…" if len(svc.name) > 30 else svc.name
+        row.append(InlineKeyboardButton(btn_label, callback_data=f"svc_{svc.id}"))
+        if len(row) == 2:
             rows.append(row)
             row = []
     if row:
@@ -432,7 +434,7 @@ async def _show_category_services(update, context, category: str) -> None:
         InlineKeyboardButton("◀️ Kategori", callback_data="cmd_services"),
     ])
 
-    text = f"{title}\n\nTap nomor untuk melihat detail & order:"
+    text = f"{title}\n\nPilih layanan:"
     try:
         await update.callback_query.edit_message_text(
             text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows)
@@ -445,6 +447,7 @@ async def _show_category_services(update, context, category: str) -> None:
 
 async def _show_service_detail(update, context, service_id: int) -> None:
     """Show detail of a single service with order button."""
+    import re
     all_services = context.user_data.get("services_cache", {})
     svc = all_services.get(service_id)
 
@@ -452,13 +455,32 @@ async def _show_service_detail(update, context, service_id: int) -> None:
         await update.callback_query.answer("Layanan tidak ditemukan.")
         return
 
-    desc = svc.description or "Tidak ada deskripsi"
+    # Strip HTML tags from description
+    raw_desc = svc.description or ""
+    clean_desc = re.sub(r'<[^>]+>', '', raw_desc)          # remove HTML tags
+    clean_desc = re.sub(r'&nbsp;', ' ', clean_desc)         # decode &nbsp;
+    clean_desc = re.sub(r'&amp;', '&', clean_desc)          # decode &amp;
+    clean_desc = re.sub(r'&lt;', '<', clean_desc)           # decode &lt;
+    clean_desc = re.sub(r'&gt;', '>', clean_desc)           # decode &gt;
+    clean_desc = re.sub(r'\n{3,}', '\n\n', clean_desc)      # collapse blank lines
+    clean_desc = clean_desc.strip()
+
+    if not clean_desc:
+        clean_desc = "Tidak ada deskripsi"
+
+    # Truncate if too long
+    if len(clean_desc) > 500:
+        clean_desc = clean_desc[:497] + "..."
+
+    # Escape Markdown special chars in description
+    for ch in ['*', '_', '`', '[']:
+        clean_desc = clean_desc.replace(ch, f'\\{ch}')
+
     text = (
         f"📦 *{svc.name}*\n\n"
-        f"🆔 ID: `{svc.id}`\n"
         f"💰 Harga: *{format_rupiah(svc.sell_price)}*\n"
         f"📁 Kategori: {svc.category or '-'}\n\n"
-        f"📝 {desc}\n\n"
+        f"📝 *Deskripsi:*\n{clean_desc}\n\n"
         f"Untuk order ketik:\n`/order {svc.id} <target>`"
     )
 
