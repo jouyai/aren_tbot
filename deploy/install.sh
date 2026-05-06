@@ -81,17 +81,22 @@ DATABASE_URL="postgresql+asyncpg://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME"
 echo -e "  ${GREEN}✓ Database siap${NC}"
 
 # ---------------------------------------------------------------------------
-# 3. Clone / update repository
+# 3. Download repository as ZIP (no git credentials needed)
 # ---------------------------------------------------------------------------
-echo -e "${CYAN}[3/6] Cloning repository...${NC}"
+echo -e "${CYAN}[3/6] Downloading bot source code...${NC}"
 
-if [ -d "$BOT_DIR/.git" ]; then
-    cd "$BOT_DIR" && git pull -q
-    echo -e "  ${GREEN}✓ Repository updated${NC}"
-else
-    git clone -q https://github.com/jouyai/aren_tbot.git "$BOT_DIR"
-    echo -e "  ${GREEN}✓ Repository cloned${NC}"
-fi
+apt-get install -y -qq unzip wget
+
+# Remove old install if exists
+[ -d "$BOT_DIR" ] && rm -rf "$BOT_DIR"
+
+# Download ZIP from GitHub (works for public repos without login)
+wget -q "https://github.com/jouyai/aren_tbot/archive/refs/heads/main.zip" -O /tmp/aren_tbot.zip
+unzip -q /tmp/aren_tbot.zip -d /tmp/
+mv /tmp/aren_tbot-main "$BOT_DIR"
+rm -f /tmp/aren_tbot.zip
+
+echo -e "  ${GREEN}✓ Source code downloaded${NC}"
 
 cd "$BOT_DIR"
 
