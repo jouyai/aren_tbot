@@ -405,18 +405,33 @@ async def _show_categories(update, context, telegram_id: int, username, ppob_cli
             )
             return
 
-        # Filter hanya kategori "Aplikasi Premium" (case-insensitive)
+        # Filter hanya kategori "Aplikasi Premium" (case-insensitive, substring match)
         ALLOWED_CATEGORIES = {"aplikasi premium"}
         filtered_services = [
             svc for svc in services
-            if (svc.category or "").lower().strip() in ALLOWED_CATEGORIES
+            if any(
+                allowed in (svc.category or "").lower()
+                for allowed in ALLOWED_CATEGORIES
+            )
         ]
+
+        # Jika tidak ada yang cocok, tampilkan semua (fallback)
+        if not filtered_services:
+            filtered_services = services
 
         # Group by category
         categories: dict[str, list] = {}
         for svc in filtered_services:
             cat = svc.category or "Lainnya"
             categories.setdefault(cat, []).append(svc)
+
+        if not categories:
+            await _send_or_edit(
+                update,
+                "ℹ️ Belum ada layanan tersedia.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data="cmd_services_refresh")]]),
+            )
+            return
 
         # Build category buttons (3 per row)
         cat_names = sorted(categories.keys())
