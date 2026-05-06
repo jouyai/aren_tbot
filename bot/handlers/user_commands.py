@@ -286,17 +286,76 @@ async def handle_topup(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def _do_topup(update, context, telegram_id: int, username, amount: Decimal) -> None:
-    """Core topup logic — shared by command and callback."""
+    """Core topup logic — creates QRIS via Pakasir and sends QR image to user."""
+    from bot.utils.validators import validate_topup_amount
+    from bot.integrations.pakasir_client import PakasirClient, PakasirError
+
+    # Validate amount
+    valid, error_msg = validate_topup_amount(amount)
+    if not valid:
+        await _send_or_edit(update, f"❌ {error_msg}", kb_topup_amounts())
+        return
+
+    pakasir_client: PakasirClient = context.bot_data.get("pakasir_client")
+    if pakasir_client is None:
+        await _send_or_edit(update, "❌ Payment gateway tidak tersedia.")
+        return
+
     try:
         async with get_session() as session:
             profile = await _ensure_user(session, telegram_id, username)
             if profile is None:
                 await _send_or_edit(update, "❌ Akun tidak ditemukan. Ketik /start untuk mendaftar.")
                 return
-            topup = await topup_service.create_manual_topup(session, profile.id, amount)
 
-        await _send_or_edit(update, format_topup_instruction(topup))
+            # Create pending topup record in DB
+            topup = await topup_service.create_auto_topup(session, profile.id, amount)
 
+        # Create QRIS via Pakasir
+        order_id = f"TOPUP-{topup.reference_code}"
+        details = await pakasir_client.create_qris_with_details(order_id, int(amount))
+
+        qr_image = details["qr_image"]
+        total_payment = details.get("total_payment", int(amount))
+        expired_at = details.get("expired_at", "")
+
+        # Format expiry
+        expiry_str = ""
+        if expired_at:
+            try:
+                from datetime import datetime, timezone
+                dt = datetime.fromisoformat(expired_at.replace("Z", "+00:00"))
+                # Convert to WIB (UTC+7)
+                from datetime import timedelta
+                wib = dt + timedelta(hours=7)
+                expiry_str = wib.strftime("%d/%m/%Y %H:%M WIB")
+            except Exception:
+                expiry_str = expired_at[:19]
+
+        caption = (
+            f"💳 *Top Up QRIS*\n\n"
+            f"💰 Nominal: *{format_rupiah(amount)}*\n"
+            f"💸 Total Bayar (incl. fee): *{format_rupiah(total_payment)}*\n"
+            f"⏰ Berlaku hingga: {expiry_str}\n\n"
+            f"Scan QR di atas untuk membayar.\n"
+            f"Saldo akan otomatis bertambah setelah pembayaran berhasil."
+        )
+
+        # Send QR image
+        msg = update.callback_query.message if update.callback_query else update.effective_message
+        await msg.reply_photo(
+            photo=qr_image,
+            caption=caption,
+            parse_mode="Markdown",
+        )
+
+    except PakasirError as exc:
+        logger.error("Pakasir QRIS error for user %d: %s", telegram_id, exc)
+        await _send_or_edit(
+            update,
+            "❌ Gagal membuat QRIS. Silakan coba lagi.",
+            kb_topup_amounts(),
+        )
     except TopUpError as exc:
         await _send_or_edit(update, f"❌ {exc}", kb_topup_amounts())
     except Exception as exc:
@@ -346,9 +405,16 @@ async def _show_categories(update, context, telegram_id: int, username, ppob_cli
             )
             return
 
+        # Filter hanya kategori "Aplikasi Premium" (case-insensitive)
+        ALLOWED_CATEGORIES = {"aplikasi premium"}
+        filtered_services = [
+            svc for svc in services
+            if (svc.category or "").lower().strip() in ALLOWED_CATEGORIES
+        ]
+
         # Group by category
         categories: dict[str, list] = {}
-        for svc in services:
+        for svc in filtered_services:
             cat = svc.category or "Lainnya"
             categories.setdefault(cat, []).append(svc)
 
@@ -366,12 +432,11 @@ async def _show_categories(update, context, telegram_id: int, username, ppob_cli
 
         # Bottom action buttons
         rows.append([
-            InlineKeyboardButton("📋 Semua Produk", callback_data="cat_ALL"),
             InlineKeyboardButton("🔄 Refresh", callback_data="cmd_services_refresh"),
         ])
 
         stale_note = "\n⚠️ _Data mungkin tidak terkini_" if not is_fresh else ""
-        text = f"🛒 *Pilih Kategori Layanan*{stale_note}\n\nTotal: {len(services)} layanan tersedia"
+        text = f"🛒 *Pilih Kategori Layanan*{stale_note}\n\nTotal: {len(filtered_services)} layanan tersedia"
 
         keyboard = InlineKeyboardMarkup(rows)
 
@@ -392,7 +457,7 @@ async def _show_categories(update, context, telegram_id: int, username, ppob_cli
             )
 
         # Store services in context for category browsing
-        context.user_data["services_cache"] = {svc.id: svc for svc in services}
+        context.user_data["services_cache"] = {svc.id: svc for svc in filtered_services}
         context.user_data["services_by_cat"] = categories
 
     except Exception as exc:

@@ -34,6 +34,49 @@ class TopUpError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# Auto topup (QRIS via Pakasir)
+# ---------------------------------------------------------------------------
+
+async def create_auto_topup(
+    session: AsyncSession,
+    user_id: int,
+    amount: Decimal,
+) -> TopUpRequest:
+    """Create a pending TopUpRequest for automatic QRIS payment.
+
+    Same as create_manual_topup but method='auto'.
+    The topup will be confirmed via webhook after payment.
+    """
+    valid, error_msg = validate_topup_amount(amount)
+    if not valid:
+        raise TopUpError(error_msg)
+
+    reference_code = generate_reference_code()
+    expires_at = datetime.now(tz=timezone.utc) + timedelta(hours=1)  # QRIS expires in 1 hour
+
+    topup = await topup_repository.create(
+        session=session,
+        user_id=user_id,
+        amount=amount,
+        method="auto",
+        reference_code=reference_code,
+        expires_at=expires_at,
+    )
+
+    await audit_log_repository.create_entry(
+        session=session,
+        user_id=user_id,
+        action="topup_request",
+        amount=amount,
+        reference_id=reference_code,
+        metadata={"method": "auto", "expires_at": expires_at.isoformat()},
+    )
+
+    logger.info("Auto top-up request created: user_id=%s ref=%s amount=%s", user_id, reference_code, amount)
+    return topup
+
+
+# ---------------------------------------------------------------------------
 # Manual top-up
 # ---------------------------------------------------------------------------
 

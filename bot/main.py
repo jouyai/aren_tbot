@@ -129,6 +129,7 @@ def main() -> None:
 
     # Store shared dependencies in bot_data so handlers can access them
     app.bot_data["ppob_client"] = ppob_client
+    app.bot_data["pakasir_client"] = pakasir_client
     app.bot_data["bot_app"] = app
 
     # ------------------------------------------------------------------
