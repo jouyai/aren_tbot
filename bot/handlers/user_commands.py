@@ -446,8 +446,7 @@ async def _show_category_services(update, context, category: str) -> None:
 
 
 async def _show_service_detail(update, context, service_id: int) -> None:
-    """Show detail of a single service with order button."""
-    import re
+    """Show detail of a single service — clean format, no description."""
     all_services = context.user_data.get("services_cache", {})
     svc = all_services.get(service_id)
 
@@ -455,33 +454,11 @@ async def _show_service_detail(update, context, service_id: int) -> None:
         await update.callback_query.answer("Layanan tidak ditemukan.")
         return
 
-    # Strip HTML tags from description
-    raw_desc = svc.description or ""
-    clean_desc = re.sub(r'<[^>]+>', '', raw_desc)          # remove HTML tags
-    clean_desc = re.sub(r'&nbsp;', ' ', clean_desc)         # decode &nbsp;
-    clean_desc = re.sub(r'&amp;', '&', clean_desc)          # decode &amp;
-    clean_desc = re.sub(r'&lt;', '<', clean_desc)           # decode &lt;
-    clean_desc = re.sub(r'&gt;', '>', clean_desc)           # decode &gt;
-    clean_desc = re.sub(r'\n{3,}', '\n\n', clean_desc)      # collapse blank lines
-    clean_desc = clean_desc.strip()
-
-    if not clean_desc:
-        clean_desc = "Tidak ada deskripsi"
-
-    # Truncate if too long
-    if len(clean_desc) > 500:
-        clean_desc = clean_desc[:497] + "..."
-
-    # Escape Markdown special chars in description
-    for ch in ['*', '_', '`', '[']:
-        clean_desc = clean_desc.replace(ch, f'\\{ch}')
-
     text = (
         f"📦 *{svc.name}*\n\n"
         f"💰 Harga: *{format_rupiah(svc.sell_price)}*\n"
         f"📁 Kategori: {svc.category or '-'}\n\n"
-        f"📝 *Deskripsi:*\n{clean_desc}\n\n"
-        f"Untuk order ketik:\n`/order {svc.id} <target>`"
+        f"Untuk order, ketik:\n`/order {svc.id} <target>`"
     )
 
     keyboard = InlineKeyboardMarkup([
