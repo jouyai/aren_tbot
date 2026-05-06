@@ -1,6 +1,5 @@
-# Fly.io configuration for Telegram Bot PPOB/SMM Reseller
 app = "aren-tbot"
-primary_region = "sin"  # Singapore — paling dekat dari Indonesia
+primary_region = "sin"
 
 [build]
   # Fly.io akan detect Python otomatis via Dockerfile atau nixpacks
