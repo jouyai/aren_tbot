@@ -448,3 +448,26 @@ async def handle_broadcast(
         await update.effective_message.reply_text(
             "❌ Terjadi kesalahan saat broadcast. Silakan coba lagi nanti."
         )
+
+
+# ---------------------------------------------------------------------------
+# /maintenance
+# ---------------------------------------------------------------------------
+
+@require_admin
+async def handle_maintenance(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Toggle maintenance mode on or off.
+
+    Usage: /maintenance
+    """
+    is_maintenance = context.bot_data.get("maintenance_mode", False)
+    new_status = not is_maintenance
+    context.bot_data["maintenance_mode"] = new_status
+    
+    status_str = "AKTIF 🔴 (Bot terkunci untuk user biasa)" if new_status else "NONAKTIF 🟢 (Bot kembali normal)"
+    await update.effective_message.reply_text(
+        f"🚧 *Mode Maintenance* 🚧\n\nStatus: {status_str}",
+        parse_mode="Markdown",
+    )

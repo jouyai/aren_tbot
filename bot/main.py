@@ -19,7 +19,8 @@ import logging
 import threading
 
 import uvicorn
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, MessageHandler, TypeHandler, filters
 
 from bot.config import (
     BOT_TOKEN,
@@ -34,6 +35,7 @@ from bot.handlers.admin_commands import (
     handle_confirm_topup,
     handle_kurangsaldo,
     handle_setharga,
+    handle_maintenance,
 )
 from bot.handlers.callbacks import handle_callback
 from bot.handlers.user_commands import (
@@ -53,6 +55,7 @@ from bot.integrations.webhook_handler import app as webhook_app
 from bot.integrations.webhook_handler import set_dependencies
 from bot.scheduler import setup_scheduler
 from bot.utils.error_handler import global_error_handler, unknown_command_handler
+from bot.middleware.maintenance_guard import maintenance_check
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +135,9 @@ def main() -> None:
     app.bot_data["pakasir_client"] = pakasir_client
     app.bot_data["bot_app"] = app
 
+    # Register maintenance middleware at group -1 so it runs before any other handlers
+    app.add_handler(TypeHandler(Update, maintenance_check), group=-1)
+
     # ------------------------------------------------------------------
     # 3. Register user command handlers
     # ------------------------------------------------------------------
@@ -153,6 +159,7 @@ def main() -> None:
     app.add_handler(CommandHandler("kurangsaldo", handle_kurangsaldo))
     app.add_handler(CommandHandler("setharga", handle_setharga))
     app.add_handler(CommandHandler("broadcast", handle_broadcast))
+    app.add_handler(CommandHandler("maintenance", handle_maintenance))
 
     # ------------------------------------------------------------------
     # 5. Register text message handler (ReplyKeyboard button taps)

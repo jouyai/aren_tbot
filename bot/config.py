@@ -51,6 +51,7 @@ PAKASIR_API_KEY: str = _get_required("PAKASIR_API_KEY")
 # ---------------------------------------------------------------------------
 WEBHOOK_HOST: str = _get_optional("WEBHOOK_HOST", "https://yourdomain.com")
 LOG_LEVEL: str = _get_optional("LOG_LEVEL", "INFO")
+MAINTENANCE_MODE: bool = _get_optional("MAINTENANCE_MODE", "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Logging setup
