@@ -501,10 +501,22 @@ async def _show_category_services(update, context, category: str) -> None:
     context.user_data["svc_list_ids"] = [svc.id for svc in services]
 
     # Bangun teks daftar bernomor
+    import re
     lines = [f"{title}\n"]
     for idx, svc in enumerate(services, start=1):
         price = format_rupiah(svc.sell_price)
-        lines.append(f"`{idx:>2}.` {svc.name}\n      💰 {price}")
+        # Bersihkan nama produk dari tag [ INPUT EMAIL ... ] atau [ BACA DESKRIPSI ]
+        # Hapus kurung siku dan isinya agar nama terlihat jauh lebih rapi
+        clean_name = re.sub(r'\[.*?\]', '', svc.name).strip()
+        
+        # Jika setelah dibersihkan malah kosong (walaupun jarang), pakai nama asli
+        if not clean_name:
+            clean_name = svc.name
+
+        # Hilangkan spasi ganda yang mungkin tersisa
+        clean_name = re.sub(r'\s+', ' ', clean_name)
+
+        lines.append(f"`{idx:>2}.` {clean_name}\n      💰 {price}")
     lines.append("\n*Ketuk nomor untuk melihat detail & order:*")
     text = "\n".join(lines)
 
