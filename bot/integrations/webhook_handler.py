@@ -240,5 +240,21 @@ async def _notify_user(telegram_id: Optional[int], amount: int) -> None:
             parse_mode="Markdown",
         )
         logger.info("_notify_user: notification sent to telegram_id=%s", telegram_id)
+        
+        # Channel log
+        from bot.config import LOG_CHANNEL_ID
+        if LOG_CHANNEL_ID:
+            try:
+                await _bot_app.bot.send_message(
+                    chat_id=LOG_CHANNEL_ID,
+                    text=f"💸 *TOP UP BERHASIL*\n\n"
+                         f"👤 Telegram ID: `{telegram_id}`\n"
+                         f"💰 Nominal: *{formatted_amount}*\n"
+                         f"💳 Metode: QRIS",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.warning("_notify_user: failed to send channel log: %s", e)
+
     except Exception as exc:
         logger.warning("_notify_user: failed to send notification to %s: %s", telegram_id, exc)

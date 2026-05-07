@@ -230,6 +230,25 @@ async def create_order(
             provider_order_id,
         )
 
+        if bot_app is not None:
+            from bot.config import LOG_CHANNEL_ID
+            if LOG_CHANNEL_ID:
+                try:
+                    from bot.utils.formatters import format_rupiah
+                    await bot_app.bot.send_message(
+                        chat_id=LOG_CHANNEL_ID,
+                        text=f"🛒 *ORDER BARU MASUK*\n\n"
+                             f"🆔 Order ID: `#{order.id}`\n"
+                             f"👤 User ID: `{user_id}`\n"
+                             f"📦 Layanan ID: `{service_id}`\n"
+                             f"🎯 Target: `{target}`\n"
+                             f"💰 Harga: *{format_rupiah(sell_price)}*\n"
+                             f"🔄 Status: *Diproses*",
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    logger.error("Failed to send channel log for order %d: %s", order.id, e)
+
     except PPOBOrderError as exc:
         # 7. PPOB rejected the order — rollback debit
         logger.warning(
@@ -505,12 +524,29 @@ async def _notify_order_terminal(bot_app, session: AsyncSession, order: Order) -
     if telegram_id is None:
         return
 
+    from bot.config import LOG_CHANNEL_ID
+    from bot.utils.formatters import format_rupiah
+    
     if order.status == "success":
         msg = (
             f"✅ Order #{order.id} berhasil diselesaikan!\n"
             f"Layanan: {order.service_id}\n"
             f"Target: {order.target}"
         )
+        if LOG_CHANNEL_ID:
+            try:
+                await bot_app.bot.send_message(
+                    chat_id=LOG_CHANNEL_ID,
+                    text=f"✅ *ORDER SELESAI*\n\n"
+                         f"🆔 Order ID: `#{order.id}`\n"
+                         f"👤 User ID: `{order.user_id}`\n"
+                         f"📦 Layanan ID: `{order.service_id}`\n"
+                         f"🎯 Target: `{order.target}`\n"
+                         f"💰 Harga: *{format_rupiah(order.amount)}*",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error("Failed to send channel log for order %d: %s", order.id, e)
     else:
         msg = (
             f"❌ Order #{order.id} gagal.\n"
@@ -518,6 +554,21 @@ async def _notify_order_terminal(bot_app, session: AsyncSession, order: Order) -
             f"Target: {order.target}\n"
             f"Keterangan: {order.status_message or '-'}"
         )
+        if LOG_CHANNEL_ID:
+            try:
+                await bot_app.bot.send_message(
+                    chat_id=LOG_CHANNEL_ID,
+                    text=f"❌ *ORDER GAGAL*\n\n"
+                         f"🆔 Order ID: `#{order.id}`\n"
+                         f"👤 User ID: `{order.user_id}`\n"
+                         f"📦 Layanan ID: `{order.service_id}`\n"
+                         f"🎯 Target: `{order.target}`\n"
+                         f"💰 Harga: *{format_rupiah(order.amount)}*\n"
+                         f"⚠️ Alasan: {order.status_message or '-'}",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error("Failed to send channel log for order %d: %s", order.id, e)
 
     await _notify_user(bot_app, telegram_id, msg)
 

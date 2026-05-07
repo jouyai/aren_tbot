@@ -3,7 +3,7 @@ Configuration module — reads all environment variables for the bot.
 """
 import logging
 import os
-from typing import List
+from typing import List, Optional
 
 from dotenv import load_dotenv
 
@@ -28,6 +28,9 @@ BOT_TOKEN: str = _get_required("BOT_TOKEN")
 
 _admin_ids_raw: str = _get_required("ADMIN_IDS")
 ADMIN_IDS: List[int] = [int(x.strip()) for x in _admin_ids_raw.split(",") if x.strip()]
+
+LOG_CHANNEL_ID_RAW: str = _get_optional("LOG_CHANNEL_ID", "")
+LOG_CHANNEL_ID: Optional[int] = int(LOG_CHANNEL_ID_RAW) if LOG_CHANNEL_ID_RAW.strip() else None
 
 # ---------------------------------------------------------------------------
 # Database
