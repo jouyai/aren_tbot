@@ -87,7 +87,8 @@ class TargetValidator:
 
     # Full-match patterns — anchored at both ends to prevent partial matches.
     _URL_PATTERN = re.compile(r'^https?://[^\s]+$')
-    _USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_]{1,50}$')
+    _USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9_.]{1,100}$')
+    _EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9.\-]+$')
 
     @staticmethod
     def validate_url(target: str) -> bool:
@@ -101,12 +102,19 @@ class TargetValidator:
         return bool(TargetValidator._URL_PATTERN.match(target))
 
     @staticmethod
+    def validate_email(target: str) -> bool:
+        """Return True if *target* is a valid email address."""
+        if not target:
+            return False
+        return bool(TargetValidator._EMAIL_PATTERN.match(target))
+
+    @staticmethod
     def validate_username(target: str) -> bool:
         """Return True if *target* is a valid username.
 
         Rules:
-          - 1 to 50 characters
-          - Only alphanumeric characters and underscores (no spaces)
+          - 1 to 100 characters
+          - Alphanumeric, underscores, dots (username.name format)
         """
         if not target:
             return False
@@ -118,6 +126,7 @@ class TargetValidator:
 
         Known service types:
           - ``'url'``      → :meth:`validate_url`
+          - ``'email'``    → :meth:`validate_email`
           - ``'username'`` → :meth:`validate_username`
 
         Any unknown service type is accepted (returns ``True``) to avoid
@@ -125,6 +134,7 @@ class TargetValidator:
         """
         validators = {
             "url": TargetValidator.validate_url,
+            "email": TargetValidator.validate_email,
             "username": TargetValidator.validate_username,
         }
         validator_fn = validators.get(service_type, lambda x: True)

@@ -79,14 +79,16 @@ _PPOB_STATUS_MAP = {
 
 
 def _infer_service_type(target: str) -> str:
-    """Heuristically infer whether a target is a URL or username.
+    """Heuristically infer whether a target is a URL, email, or username.
 
-    Since the service type is not stored in the DB, we use a simple heuristic:
-    - If the target starts with http:// or https://, treat it as a URL.
-    - Otherwise, treat it as a username.
+    - Starts with http:// or https://  → 'url'
+    - Contains '@'                      → 'email'
+    - Otherwise                         → 'username'
     """
     if target.startswith("http://") or target.startswith("https://"):
         return "url"
+    if "@" in target:
+        return "email"
     return "username"
 
 
