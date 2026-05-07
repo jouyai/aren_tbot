@@ -270,14 +270,30 @@ async def create_order(
         # Notify user (best-effort)
         if bot_app is not None:
             from bot.repositories import user_repository
+            from bot.config import ADMIN_IDS
             user = await user_repository.get_by_telegram_id(session, user_id)
             if user is not None:
-                await _notify_user(
-                    bot_app,
-                    user.telegram_id,
-                    f"❌ Order #{order.id} gagal diproses. Saldo Anda telah dikembalikan.\n"
-                    f"Alasan: {exc}",
-                )
+                is_maintenance = bot_app.bot_data.get("maintenance_mode", False)
+                if is_maintenance:
+                    for admin_id in ADMIN_IDS:
+                        await _notify_user(
+                            bot_app,
+                            admin_id,
+                            f"⚠️ [MAINTENANCE] PPOB Order Error pada Order #{order.id}:\n{exc}"
+                        )
+                    await _notify_user(
+                        bot_app,
+                        user.telegram_id,
+                        f"❌ Order #{order.id} gagal diproses. Saldo Anda telah dikembalikan.\n"
+                        f"Alasan: {exc}",
+                    )
+                else:
+                    await _notify_user(
+                        bot_app,
+                        user.telegram_id,
+                        f"❌ Order #{order.id} gagal diproses. Saldo Anda telah dikembalikan.\n"
+                        f"Harap segera hubungi admin.",
+                    )
 
     except PPOBError as exc:
         # Network/server error after all retries — same rollback logic
@@ -318,14 +334,30 @@ async def create_order(
 
         if bot_app is not None:
             from bot.repositories import user_repository
+            from bot.config import ADMIN_IDS
             user = await user_repository.get_by_telegram_id(session, user_id)
             if user is not None:
-                await _notify_user(
-                    bot_app,
-                    user.telegram_id,
-                    f"❌ Order #{order.id} gagal diproses (error jaringan). "
-                    f"Saldo Anda telah dikembalikan.",
-                )
+                is_maintenance = bot_app.bot_data.get("maintenance_mode", False)
+                if is_maintenance:
+                    for admin_id in ADMIN_IDS:
+                        await _notify_user(
+                            bot_app,
+                            admin_id,
+                            f"⚠️ [MAINTENANCE] PPOB Network Error pada Order #{order.id}:\n{exc}"
+                        )
+                    await _notify_user(
+                        bot_app,
+                        user.telegram_id,
+                        f"❌ Order #{order.id} gagal diproses (error jaringan). "
+                        f"Saldo Anda telah dikembalikan.",
+                    )
+                else:
+                    await _notify_user(
+                        bot_app,
+                        user.telegram_id,
+                        f"❌ Order #{order.id} gagal diproses. Saldo Anda telah dikembalikan.\n"
+                        f"Harap segera hubungi admin.",
+                    )
 
     return order
 
