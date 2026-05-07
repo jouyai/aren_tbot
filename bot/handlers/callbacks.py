@@ -11,6 +11,7 @@ Callback data:
   cmd_services_refresh   → force-refresh from API
   cat_<name>             → show services in category (cat_ALL = all)
   svc_<id>               → show service detail
+  svcnum_<n>             → show service detail by position number in current list
   cekorder_<id>          → show order status
 """
 from __future__ import annotations
@@ -89,6 +90,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await _show_service_detail(update, context, service_id)
         except Exception as exc:
             logger.error("Callback svc detail error: %s", exc, exc_info=True)
+            await query.answer("❌ Terjadi kesalahan.")
+
+    elif data.startswith("svcnum_"):
+        # User menekan tombol angka — resolve posisi ke service_id
+        try:
+            num = int(data[7:])  # strip "svcnum_"
+            svc_list_ids: list = context.user_data.get("svc_list_ids", [])
+            if not svc_list_ids or num < 1 or num > len(svc_list_ids):
+                await query.answer("❌ Nomor tidak valid.")
+                return
+            service_id = svc_list_ids[num - 1]
+            await _show_service_detail(update, context, service_id)
+        except Exception as exc:
+            logger.error("Callback svcnum error: %s", exc, exc_info=True)
             await query.answer("❌ Terjadi kesalahan.")
 
     elif data == "cmd_history":

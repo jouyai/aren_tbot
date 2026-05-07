@@ -481,7 +481,7 @@ async def _show_categories(update, context, telegram_id: int, username, ppob_cli
 
 
 async def _show_category_services(update, context, category: str) -> None:
-    """Show services in a specific category as name buttons (not ID numbers)."""
+    """Show services as a numbered list in text + number buttons for selection."""
     categories = context.user_data.get("services_by_cat", {})
     all_services_cache = context.user_data.get("services_cache", {})
 
@@ -496,25 +496,34 @@ async def _show_category_services(update, context, category: str) -> None:
         await update.callback_query.answer("Tidak ada layanan di kategori ini.")
         return
 
-    # Build name buttons (2 per row) — show service name, not ID
+    # Simpan urutan nomor produk ke context agar bisa di-resolve saat tombol ditekan
+    context.user_data["svc_list_category"] = category
+    context.user_data["svc_list_ids"] = [svc.id for svc in services]
+
+    # Bangun teks daftar bernomor
+    lines = [f"{title}\n"]
+    for idx, svc in enumerate(services, start=1):
+        price = format_rupiah(svc.sell_price)
+        lines.append(f"`{idx:>2}.` {svc.name}\n      💰 {price}")
+    lines.append("\n*Ketuk nomor untuk melihat detail & order:*")
+    text = "\n".join(lines)
+
+    # Bangun tombol angka — 5 per baris
     rows = []
     row = []
-    for svc in services:
-        # Truncate long names to fit button
-        btn_label = svc.name[:30] + "…" if len(svc.name) > 30 else svc.name
-        row.append(InlineKeyboardButton(btn_label, callback_data=f"svc_{svc.id}"))
-        if len(row) == 2:
+    for idx in range(1, len(services) + 1):
+        row.append(InlineKeyboardButton(str(idx), callback_data=f"svcnum_{idx}"))
+        if len(row) == 5:
             rows.append(row)
             row = []
     if row:
         rows.append(row)
 
-    # Bottom navigation
+    # Navigasi bawah
     rows.append([
         InlineKeyboardButton("◀️ Kategori", callback_data="cmd_services"),
     ])
 
-    text = f"{title}\n\nPilih layanan:"
     try:
         await update.callback_query.edit_message_text(
             text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows)
@@ -541,8 +550,10 @@ async def _show_service_detail(update, context, service_id: int) -> None:
         f"Untuk order, ketik:\n`/order {svc.id} <target>`"
     )
 
+    # Tombol kembali ke daftar bernomor kategori ini
+    back_cat = svc.category or "Lainnya"
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Kembali", callback_data=f"cat_{svc.category or 'Lainnya'}")],
+        [InlineKeyboardButton("◀️ Kembali ke Daftar", callback_data=f"cat_{back_cat[:30]}")],
     ])
 
     try:
