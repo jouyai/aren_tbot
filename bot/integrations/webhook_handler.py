@@ -158,26 +158,38 @@ async def payment_webhook(request: Request) -> dict:
         raise HTTPException(status_code=400, detail="Transaction not verified")
 
     # ------------------------------------------------------------------ #
-    # 5. Credit wallet
+    # 5. Credit wallet + ambil telegram_id dalam satu session
     # ------------------------------------------------------------------ #
+    telegram_id: Optional[int] = None
     async with get_session() as session:
         confirmed_topup = await topup_service.process_qris_payment(
             session=session,
             ref_code=ref_code,
             amount=amount,
         )
+        # Ambil telegram_id di sini — dalam session yang sama — untuk
+        # menghindari event-loop conflict saat membuka session baru dari
+        # thread uvicorn yang terpisah.
+        try:
+            from bot.repositories import user_repository
+            user = await user_repository.get_by_id(session, confirmed_topup.user_id)
+            if user is not None:
+                telegram_id = user.telegram_id
+        except Exception as exc:
+            logger.warning("payment_webhook: failed to fetch telegram_id: %s", exc)
 
     logger.info(
-        "payment_webhook: wallet credited ref_code=%s user_id=%s amount=%s",
+        "payment_webhook: wallet credited ref_code=%s user_id=%s telegram_id=%s amount=%s",
         ref_code,
         confirmed_topup.user_id,
+        telegram_id,
         amount,
     )
 
     # ------------------------------------------------------------------ #
     # 6. Send Telegram notification to user
     # ------------------------------------------------------------------ #
-    await _notify_user(confirmed_topup.user_id, amount)
+    await _notify_user(telegram_id, amount)
 
     return {"status": "ok"}
 
@@ -196,9 +208,11 @@ async def health_check() -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-async def _notify_user(user_id: int, amount: int) -> None:
+async def _notify_user(telegram_id: Optional[int], amount: int) -> None:
     """Send a Telegram notification to the user after a successful top-up.
 
+    Accepts *telegram_id* directly (no extra DB lookup) to avoid event-loop
+    conflicts when called from the uvicorn background thread.
     Silently swallows errors so a notification failure never causes the
     webhook to return an error response.
     """
@@ -206,26 +220,23 @@ async def _notify_user(user_id: int, amount: int) -> None:
         logger.debug("_notify_user: bot_app not set, skipping notification")
         return
 
+    if telegram_id is None:
+        logger.warning("_notify_user: telegram_id is None, cannot send notification")
+        return
+
     try:
-        from bot.repositories import user_repository
-        async with get_session() as session:
-            user = await user_repository.get_by_id(session, user_id)
-
-        if user is None:
-            logger.warning("_notify_user: user_id=%s not found", user_id)
-            return
-
         formatted_amount = f"Rp {amount:,}".replace(",", ".")
         message = (
-            f"✅ Top up berhasil!\n\n"
-            f"Nominal: {formatted_amount}\n"
-            f"Metode: QRIS\n\n"
-            f"Saldo kamu sudah bertambah."
+            f"✅ *Top Up Berhasil!*\n\n"
+            f"💰 Nominal: *{formatted_amount}*\n"
+            f"💳 Metode: QRIS\n\n"
+            f"Saldo kamu sudah bertambah. Ketik /saldo untuk cek saldo terbaru."
         )
         await _bot_app.bot.send_message(
-            chat_id=user.telegram_id,
+            chat_id=telegram_id,
             text=message,
+            parse_mode="Markdown",
         )
-        logger.info("_notify_user: notification sent to telegram_id=%s", user.telegram_id)
+        logger.info("_notify_user: notification sent to telegram_id=%s", telegram_id)
     except Exception as exc:
-        logger.warning("_notify_user: failed to send notification: %s", exc)
+        logger.warning("_notify_user: failed to send notification to %s: %s", telegram_id, exc)
