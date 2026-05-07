@@ -503,20 +503,36 @@ async def _show_category_services(update, context, category: str) -> None:
     # Bangun teks daftar bernomor
     import re
     lines = [f"{title}\n"]
+    
+    useless_tags = [
+        r'INPUT EMAIL.*?',
+        r'BACA DESKRIPSI',
+        r'EMAIL SELLER',
+        r'EMAIL PEMBELI',
+        r'PROSES CEPAT',
+        r'VIA LINK'
+    ]
+    tag_pattern = r'\[\s*(' + '|'.join(useless_tags) + r')\s*\]'
+    
     for idx, svc in enumerate(services, start=1):
         price = format_rupiah(svc.sell_price)
-        # Bersihkan nama produk dari tag [ INPUT EMAIL ... ] atau [ BACA DESKRIPSI ]
-        # Hapus kurung siku dan isinya agar nama terlihat jauh lebih rapi
-        clean_name = re.sub(r'\[.*?\]', '', svc.name).strip()
         
-        # Jika setelah dibersihkan malah kosong (walaupun jarang), pakai nama asli
+        # Hapus tag instruksi yang tidak perlu
+        clean_name = re.sub(tag_pattern, '', svc.name, flags=re.IGNORECASE).strip()
+        
+        # Ubah sisa kurung siku (seperti durasi/tipe akun) menjadi pemisah rapi
+        clean_name = clean_name.replace('[', ' | ').replace(']', '')
+        
+        # Rapikan spasi dan pemisah ganda
+        clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+        clean_name = clean_name.replace(' |  | ', ' | ').replace('| |', '|')
+        clean_name = clean_name.strip(' |')
+
         if not clean_name:
             clean_name = svc.name
 
-        # Hilangkan spasi ganda yang mungkin tersisa
-        clean_name = re.sub(r'\s+', ' ', clean_name)
-
-        lines.append(f"`{idx:>2}.` {clean_name}\n      💰 {price}")
+        lines.append(f"`{idx:>2}.` 📌 *{clean_name}*\n      └ 💰 {price}")
+        
     lines.append("\n*Ketuk nomor untuk melihat detail & order:*")
     text = "\n".join(lines)
 
