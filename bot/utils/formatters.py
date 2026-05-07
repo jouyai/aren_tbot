@@ -126,7 +126,11 @@ def format_order_status(order: Order) -> str:
     ]
 
     if order.status_message:
-        lines.append(f"📝 Keterangan: {order.status_message}")
+        msg = order.status_message
+        # Sembunyikan pesan teknis/error raw dari user biasa
+        if "PPOB" in msg or "HTTP" in msg or "{" in msg:
+            msg = "Layanan sedang gangguan dari pusat / maintenance. Saldo Anda telah otomatis dikembalikan."
+        lines.append(f"📝 Keterangan: {msg}")
 
     return "\n".join(lines)
 
