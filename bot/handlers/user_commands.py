@@ -34,6 +34,7 @@ from bot.services.order_service import (
 )
 from bot.services.topup_service import TopUpError
 from bot.utils.formatters import (
+    clean_service_name,
     format_history,
     format_order_status,
     format_profile,
@@ -501,36 +502,11 @@ async def _show_category_services(update, context, category: str) -> None:
     context.user_data["svc_list_ids"] = [svc.id for svc in services]
 
     # Bangun teks daftar bernomor
-    import re
     lines = [f"{title}\n"]
-    
-    useless_tags = [
-        r'INPUT EMAIL.*?',
-        r'BACA DESKRIPSI',
-        r'EMAIL SELLER',
-        r'EMAIL PEMBELI',
-        r'PROSES CEPAT',
-        r'VIA LINK'
-    ]
-    tag_pattern = r'\[\s*(' + '|'.join(useless_tags) + r')\s*\]'
     
     for idx, svc in enumerate(services, start=1):
         price = format_rupiah(svc.sell_price)
-        
-        # Hapus tag instruksi yang tidak perlu
-        clean_name = re.sub(tag_pattern, '', svc.name, flags=re.IGNORECASE).strip()
-        
-        # Ubah sisa kurung siku (seperti durasi/tipe akun) menjadi pemisah rapi
-        clean_name = clean_name.replace('[', ' | ').replace(']', '')
-        
-        # Rapikan spasi dan pemisah ganda
-        clean_name = re.sub(r'\s+', ' ', clean_name).strip()
-        clean_name = clean_name.replace(' |  | ', ' | ').replace('| |', '|')
-        clean_name = clean_name.strip(' |')
-
-        if not clean_name:
-            clean_name = svc.name
-
+        clean_name = clean_service_name(svc.name)
         lines.append(f"`{idx:>2}.` 📌 *{clean_name}*\n      └ 💰 {price}")
         
     lines.append("\n*Ketuk nomor untuk melihat detail & order:*")

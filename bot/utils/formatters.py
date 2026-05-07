@@ -15,11 +15,40 @@ Requirements: 2.1, 2.3, 5.1, 6.6, 7.1, 7.3
 """
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from typing import Union
 
 from bot.models.db_models import Order, Service, TopUpRequest
 from bot.services.user_service import UserProfile
+
+
+def clean_service_name(raw_name: str) -> str:
+    """Clean up service names by removing useless instructional tags.
+    Format remaining tags nicely.
+    """
+    if not raw_name:
+        return raw_name
+
+    useless_tags = [
+        r'INPUT EMAIL.*?',
+        r'BACA DESKRIPSI',
+        r'EMAIL SELLER',
+        r'EMAIL PEMBELI',
+        r'PROSES CEPAT',
+        r'VIA LINK',
+        r'VIA LOGIN',
+        r'KHUSUS.*?',
+    ]
+    tag_pattern = r'\[\s*(' + '|'.join(useless_tags) + r')\s*\]'
+
+    clean_name = re.sub(tag_pattern, '', raw_name, flags=re.IGNORECASE).strip()
+    clean_name = clean_name.replace('[', ' | ').replace(']', '')
+    clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+    clean_name = clean_name.replace(' |  | ', ' | ').replace('| |', '|')
+    clean_name = clean_name.strip(' |')
+
+    return clean_name if clean_name else raw_name
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +132,7 @@ def format_order_status(order: Order) -> str:
     # Service name — use relationship if loaded, otherwise show ID
     service_name: str
     if hasattr(order, "service") and order.service is not None:
-        service_name = order.service.name
+        service_name = clean_service_name(order.service.name)
     else:
         service_name = f"Layanan #{order.service_id}"
 
@@ -154,13 +183,14 @@ def format_service_list(services: list, is_fresh: bool = True) -> str:
 
     lines = [header]
     for svc in services:
+        clean_name = clean_service_name(svc.name)
         description = svc.description or "Tidak ada deskripsi"
         # Truncate long descriptions
         if len(description) > 80:
             description = description[:77] + "..."
 
         lines.append(
-            f"🔹 *[{svc.id}] {svc.name}*\n"
+            f"🔹 *[{svc.id}] {clean_name}*\n"
             f"   📝 {description}\n"
             f"   💰 Harga: {format_rupiah(svc.sell_price)}\n"
         )
@@ -192,7 +222,7 @@ def format_history(orders: list) -> str:
 
         # Service name
         if hasattr(order, "service") and order.service is not None:
-            service_name = order.service.name
+            service_name = clean_service_name(order.service.name)
         else:
             service_name = f"Layanan #{order.service_id}"
 
