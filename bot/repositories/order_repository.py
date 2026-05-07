@@ -11,6 +11,7 @@ from typing import Optional
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from bot.models.db_models import Order
 
@@ -51,7 +52,9 @@ async def get_by_id_and_user(
     Requirements: 7.1, 7.2
     """
     result = await session.execute(
-        select(Order).where(
+        select(Order)
+        .options(selectinload(Order.service))
+        .where(
             Order.id == order_id,
             Order.user_id == user_id,
         )
@@ -112,6 +115,7 @@ async def get_user_history(
     """
     result = await session.execute(
         select(Order)
+        .options(selectinload(Order.service))
         .where(Order.user_id == user_id)
         .order_by(Order.created_at.desc())
         .limit(limit)
