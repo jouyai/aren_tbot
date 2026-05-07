@@ -73,6 +73,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             logger.error("Callback topup error: %s", exc, exc_info=True)
             await query.message.reply_text("❌ Terjadi kesalahan.")
 
+    elif data == "topup_custom":
+        context.user_data["awaiting_topup_amount"] = True
+        await query.message.reply_text(
+            "📝 *Ketik nominal top up yang Anda inginkan:*\n\n"
+            "Contoh: `15000` (tanpa titik atau koma).",
+            parse_mode="Markdown"
+        )
+
     elif data == "cmd_services":
         await _show_categories(update, context, tg_user.id, tg_user.username, ppob_client, force_refresh=False)
 
@@ -90,6 +98,20 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await _show_service_detail(update, context, service_id)
         except Exception as exc:
             logger.error("Callback svc detail error: %s", exc, exc_info=True)
+            await query.answer("❌ Terjadi kesalahan.")
+
+    elif data.startswith("buy_"):
+        try:
+            service_id = int(data[4:])
+            context.user_data["awaiting_target_for_service"] = service_id
+            await query.message.reply_text(
+                "📝 *Silakan ketik / balas dengan target pesanan Anda.*\n\n"
+                "Contoh target: `email`, `ID game`, `link profil`, atau `username` (sesuaikan dengan jenis layanan).\n"
+                "_Ketik bebas di chat ini._",
+                parse_mode="Markdown"
+            )
+        except Exception as exc:
+            logger.error("Callback buy error: %s", exc, exc_info=True)
             await query.answer("❌ Terjadi kesalahan.")
 
     elif data.startswith("svcnum_"):

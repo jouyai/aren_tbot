@@ -142,14 +142,6 @@ def main() -> None:
     # 3. Register user command handlers
     # ------------------------------------------------------------------
     app.add_handler(CommandHandler("start", handle_start))
-    app.add_handler(CommandHandler("profile", handle_profile))
-    app.add_handler(CommandHandler("saldo", handle_saldo))
-    app.add_handler(CommandHandler("topup", handle_topup))
-    app.add_handler(CommandHandler("services", handle_services))
-    app.add_handler(CommandHandler("layanan", handle_services))
-    app.add_handler(CommandHandler("order", handle_order))
-    app.add_handler(CommandHandler("cekorder", handle_cekorder))
-    app.add_handler(CommandHandler("history", handle_history))
 
     # ------------------------------------------------------------------
     # 4. Register admin command handlers

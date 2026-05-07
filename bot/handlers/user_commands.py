@@ -76,6 +76,9 @@ def kb_topup_amounts() -> InlineKeyboardMarkup:
             InlineKeyboardButton("Rp 250.000", callback_data="topup_250000"),
             InlineKeyboardButton("Rp 500.000", callback_data="topup_500000"),
         ],
+        [
+            InlineKeyboardButton("📝 Nominal Lainnya", callback_data="topup_custom"),
+        ]
     ])
 
 
@@ -134,7 +137,7 @@ async def _send_or_edit(update: Update, text: str, keyboard=None, parse_mode="Ma
 # ---------------------------------------------------------------------------
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Route persistent keyboard button taps to the correct handler."""
+    """Route persistent keyboard button taps or process stateful inputs."""
     text = (update.effective_message.text or "").strip()
     routes = {
         "🛒 Layanan": handle_services,
@@ -145,7 +148,36 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     }
     handler = routes.get(text)
     if handler:
+        # Clear states when menu button is tapped
+        context.user_data.pop("awaiting_target_for_service", None)
+        context.user_data.pop("awaiting_topup_amount", None)
         await handler(update, context)
+        return
+
+    # Check for order target state
+    svc_id = context.user_data.get("awaiting_target_for_service")
+    if svc_id:
+        context.user_data.pop("awaiting_target_for_service", None)
+        await _process_order_target(update, context, svc_id, text)
+        return
+
+    # Check for topup amount state
+    topup_flag = context.user_data.get("awaiting_topup_amount")
+    if topup_flag:
+        context.user_data.pop("awaiting_topup_amount", None)
+        try:
+            from decimal import Decimal
+            amount = Decimal(text)
+            tg_user = update.effective_user
+            await _do_topup(update, context, tg_user.id, tg_user.username, amount)
+        except Exception:
+            await update.effective_message.reply_text("❌ Nominal tidak valid. Harus berupa angka.")
+        return
+
+    await update.effective_message.reply_text(
+        "💡 Silakan gunakan tombol menu di bawah untuk berinteraksi.",
+        reply_markup=MAIN_KEYBOARD
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +277,8 @@ async def handle_saldo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
 
         await update.effective_message.reply_text(
-            f"💰 *Saldo Anda saat ini:*\n\n*{format_rupiah(profile.balance)}*",
+            f"💰 *Saldo Anda saat ini:*\n\n*{format_rupiah(profile.balance)}*\n\n"
+            f"Untuk menambah saldo, ketik tombol *Top Up Sekarang* di bawah.",
             parse_mode="Markdown",
             reply_markup=kb_topup_action(),
         )
@@ -551,12 +584,13 @@ async def _show_service_detail(update, context, service_id: int) -> None:
         f"📦 *{svc.name}*\n\n"
         f"💰 Harga: *{format_rupiah(svc.sell_price)}*\n"
         f"📁 Kategori: {svc.category or '-'}\n\n"
-        f"Untuk order, ketik:\n`/order {svc.id} <target>`"
+        f"Ketuk tombol **🛒 Beli Layanan Ini** di bawah untuk memesan."
     )
 
     # Tombol kembali ke daftar bernomor kategori ini
     back_cat = svc.category or "Lainnya"
     keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛒 Beli Layanan Ini", callback_data=f"buy_{svc.id}")],
         [InlineKeyboardButton("◀️ Kembali ke Daftar", callback_data=f"cat_{back_cat[:30]}")],
     ])
 
@@ -571,32 +605,14 @@ async def _show_service_detail(update, context, service_id: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# /order <service_id> <target>
+# Order processing from interactive chat
 # ---------------------------------------------------------------------------
 
-@rate_limit
-async def handle_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _process_order_target(update: Update, context: ContextTypes.DEFAULT_TYPE, service_id: int, target: str) -> None:
     tg_user = update.effective_user
     if tg_user is None:
         return
 
-    args = context.args or []
-    if len(args) < 2:
-        await update.effective_message.reply_text(
-            "❌ Format: `/order <service_id> <target>`\n"
-            "Contoh: `/order 42 https://instagram.com/myprofile`\n\n"
-            "Ketik 🛒 *Layanan* untuk melihat daftar.",
-            parse_mode="Markdown",
-        )
-        return
-
-    try:
-        service_id = int(args[0])
-    except ValueError:
-        await update.effective_message.reply_text("❌ Service ID harus berupa angka.")
-        return
-
-    target = args[1]
     ppob_client = context.bot_data.get("ppob_client")
     bot_app = context.bot_data.get("bot_app")
 
@@ -657,30 +673,6 @@ async def handle_order(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 # ---------------------------------------------------------------------------
-# /cekorder <order_id>
-# ---------------------------------------------------------------------------
-
-@rate_limit
-async def handle_cekorder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    tg_user = update.effective_user
-    if tg_user is None:
-        return
-
-    args = context.args or []
-    if not args:
-        await update.effective_message.reply_text(
-            "❌ Format: `/cekorder <order_id>`\nContoh: `/cekorder 123`",
-            parse_mode="Markdown",
-        )
-        return
-
-    try:
-        order_id = int(args[0])
-    except ValueError:
-        await update.effective_message.reply_text("❌ Order ID harus berupa angka.")
-        return
-
-    await _show_order(update, context, tg_user.id, tg_user.username, order_id)
 
 
 async def _show_order(update, context, telegram_id: int, username, order_id: int) -> None:
