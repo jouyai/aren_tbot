@@ -21,8 +21,10 @@ import logging
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
+from sqlalchemy import select
 
 from bot.database import get_session
+from bot.models.db_models import User
 from bot.repositories import audit_log_repository, topup_repository
 from bot.services import topup_service
 
@@ -171,10 +173,10 @@ async def payment_webhook(request: Request) -> dict:
         # menghindari event-loop conflict saat membuka session baru dari
         # thread uvicorn yang terpisah.
         try:
-            from bot.repositories import user_repository
-            user = await user_repository.get_by_id(session, confirmed_topup.user_id)
-            if user is not None:
-                telegram_id = user.telegram_id
+            result = await session.execute(
+                select(User.telegram_id).where(User.id == confirmed_topup.user_id)
+            )
+            telegram_id = result.scalar_one_or_none()
         except Exception as exc:
             logger.warning("payment_webhook: failed to fetch telegram_id: %s", exc)
 
